@@ -6,7 +6,8 @@ ORG:PHG Service
 TITLE:Gestor
 TEL;TYPE=CELL,VOICE:+5511986899288
 EMAIL;TYPE=INTERNET,WORK:welber.rodrigues@phgservice.com.br
-ADR;TYPE=WORK:;;Rua São Tomé\, 129;Santo André;SP;09050-320;Brasil
+ADR;TYPE=WORK;CHARSET=UTF-8:;;Rua São Tomé\, 129;Santo André;SP;09050-32
+ 0;Brasil
 URL:https://www.phgservice.com.br/
 item1.URL:https://www.linkedin.com/in/welber-rodrigues-95a64935/
 item1.X-ABLabel:LinkedIn
