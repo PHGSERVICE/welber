@@ -66,13 +66,29 @@ button{font:inherit}
     var(--petroleo);
   border-bottom:1px solid var(--borda);
 }
-.logo{height:76px;width:auto;margin:0 auto 16px;object-fit:contain;
+.logo{height:76px;width:auto;margin:0 auto 11px;object-fit:contain;
   filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
 .logo-texto{
   margin:0 auto 20px;font-weight:800;letter-spacing:.22em;
   font-size:16px;color:var(--texto);
 }
 .logo-texto span{color:var(--laranja)}
+
+/* Bloco da marca: a logo e, logo abaixo, a assinatura da empresa */
+.marca{margin:0 auto 20px}
+.slogan{
+  display:inline-block;
+  font-size:10px;font-weight:600;
+  letter-spacing:.30em;          /* espaçamento largo: dá ar de assinatura de marca */
+  text-transform:uppercase;
+  color:var(--texto-suave);
+  white-space:nowrap;
+}
+.slogan::before,.slogan::after{   /* filetes finos dos dois lados */
+  content:"";display:inline-block;vertical-align:middle;
+  width:14px;height:1px;margin:0 9px 2px;
+  background:var(--verde);opacity:.8;
+}
 
 .foto-wrap{
   width:124px;height:124px;margin:0 auto 14px;
@@ -310,6 +326,7 @@ const CONFIG = {
   site: "https://www.phgservice.com.br/",
   areas: ["Inspeção NR-13", "Manutenção de válvulas", "Calibração de instrumentos", "Assistência técnica a gases", "Ensaios END"],
   empresa: "PHG Service",
+  slogan: "Full Service Supplier",
   vcardUrl: "welber.vcf",
   urlPublica: "https://phgservice.github.io/welber/"
 };
@@ -368,10 +385,16 @@ function renderizar(){
   const nome = val(CONFIG.nome);
   const cargo = val(CONFIG.cargo);
 
-  // Topo: logo (imagem ou texto), foto (imagem ou iniciais), nome e cargo
-  const logo = val(CONFIG.logoUrl)
+  // Topo: marca (logo + assinatura), foto (imagem ou iniciais), nome e cargo
+  const marca = val(CONFIG.logoUrl)
     ? `<img class="logo" src="${esc(CONFIG.logoUrl)}" alt="${esc(CONFIG.empresa)}" onerror="this.remove()">`
     : `<div class="logo-texto">PHG <span>SERVICE</span></div>`;
+
+  // A assinatura fecha o bloco da marca (ex: "FULL SERVICE SUPPLIER").
+  const logo = `<div class="marca">
+      ${marca}
+      ${val(CONFIG.slogan) ? `<div class="slogan">${esc(CONFIG.slogan)}</div>` : ""}
+    </div>`;
 
   const foto = val(CONFIG.fotoUrl)
     ? `<img class="foto" src="${esc(CONFIG.fotoUrl)}" alt="${nome ? "Foto de " + esc(nome) : "Foto do gestor"}"
