@@ -201,7 +201,7 @@ button{font:inherit}
 }
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .modal-box{
-  width:100%;max-width:330px;
+  width:100%;max-width:360px;
   background:var(--petroleo);
   border:1px solid var(--borda);
   border-top:3px solid var(--laranja);
@@ -210,13 +210,36 @@ button{font:inherit}
   text-align:center;
   box-shadow:var(--sombra);
 }
-.modal-box h2{margin:0 0 4px;font-size:17px}
-.modal-box p{margin:0 0 18px;font-size:12.5px;color:var(--texto-suave)}
+.modal-box h2{margin:0 0 14px;font-size:17px}
+.modal-dica{margin:0 0 16px;font-size:12.5px;line-height:1.45;color:var(--texto-suave);min-height:36px}
+
+/* Abas do modal: Contato (padrão) | Link da página */
+.abas{
+  display:flex;gap:4px;padding:4px;margin-bottom:14px;
+  background:var(--petroleo-fundo);
+  border:1px solid var(--borda);
+  border-radius:999px;
+}
+.aba{
+  flex:1;padding:9px 8px;
+  border:0;border-radius:999px;
+  background:transparent;color:var(--texto-suave);
+  font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:background .18s ease,color .18s ease;
+}
+.aba.ativa{background:var(--laranja);color:#fff}
+.aba[hidden]{display:none}
+.aba:focus-visible{outline:2px solid var(--verde);outline-offset:2px}
 .qr-box{
   background:#fff;border-radius:var(--raio-sm);
-  padding:12px;display:inline-block;line-height:0;
+  padding:10px;display:block;line-height:0;
 }
-.qr-box canvas{width:200px;height:200px;image-rendering:pixelated}
+/* QR o maior possível: quanto maior o módulo na tela, mais fácil a câmera do cliente lê.
+   Testado com simulação de câmera — abaixo de ~4,5 px por módulo a leitura começa a falhar. */
+.qr-box canvas{
+  width:100%;max-width:300px;height:auto;aspect-ratio:1;
+  margin:0 auto;display:block;image-rendering:pixelated;
+}
 .modal-url{
   margin:16px 0 0;font-size:11px;color:var(--texto-suave);
   word-break:break-all;
@@ -237,11 +260,15 @@ button{font:inherit}
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
   <div class="modal-box">
     <h2 id="modal-titulo">Compartilhar cartão</h2>
-    <p>Aponte a câmera do celular para o QR Code</p>
+    <div class="abas" role="tablist">
+      <button class="aba ativa" data-aba="contato" type="button">Contato</button>
+      <button class="aba" data-aba="link" type="button">Link da página</button>
+    </div>
+    <p class="modal-dica" id="modal-dica"></p>
     <div class="qr-box"><canvas id="qr"></canvas></div>
     <p class="modal-url" id="modal-url"></p>
     <div class="modal-acoes">
-      <button class="btn btn-primario" id="btn-copiar" type="button">Copiar link</button>
+      <button class="btn btn-primario" id="btn-acao" type="button">Salvar contato</button>
       <button class="btn btn-secundario" id="btn-fechar" type="button">Fechar</button>
     </div>
   </div>
@@ -387,9 +414,15 @@ function renderizar(){
 }
 
 /* =========================================================================
-   4) vCard (.vcf) — gerado a partir do CONFIG e baixado pelo navegador
+   4) vCard — o MESMO texto alimenta o download (.vcf) e o QR Code de contato
    ========================================================================= */
-function baixarVCard(){
+// completo = true  -> versão para DOWNLOAD (.vcf): leva tudo, inclusive endereço e LinkedIn.
+// completo = false -> versão para o QR CODE: sem endereço e sem LinkedIn.
+//   Motivo: cada caractere a mais aumenta a densidade do QR e encolhe o módulo na tela.
+//   Com endereço, o código vai a 73x73 e a câmera do cliente falha em ler.
+//   Sem ele, cai para 57x57 e a leitura fica folgada. O endereço continua visível
+//   no card e vem completo no .vcf baixado.
+function textoVCard(completo){
   const nome = val(CONFIG.nome) || "Contato";
   const partes = nome.split(/\s+/);
   const primeiro = partes[0] || "";
@@ -407,11 +440,15 @@ function baixarVCard(){
   if (wpp) linhas.push(`TEL;TYPE=CELL,VOICE:+${wpp}`);
   if (val(CONFIG.email))    linhas.push(`EMAIL;TYPE=INTERNET,WORK:${e(CONFIG.email)}`);
   if (val(CONFIG.site))     linhas.push(`URL:${e(CONFIG.site)}`);
-  if (val(CONFIG.endereco)) linhas.push(`ADR;TYPE=WORK:;;${e(CONFIG.endereco)};;;;`);
-  if (val(CONFIG.linkedin)) linhas.push(`X-SOCIALPROFILE;TYPE=linkedin:${e(CONFIG.linkedin)}`);
+  if (completo && val(CONFIG.endereco)) linhas.push(`ADR;TYPE=WORK:;;${e(CONFIG.endereco)};;;;`);
+  if (completo && val(CONFIG.linkedin)) linhas.push(`X-SOCIALPROFILE;TYPE=linkedin:${e(CONFIG.linkedin)}`);
   linhas.push("END:VCARD");
+  return linhas.join("\r\n") + "\r\n";
+}
 
-  const vcf = linhas.join("\r\n") + "\r\n";
+function baixarVCard(){
+  const nome = val(CONFIG.nome) || "Contato";
+  const vcf = textoVCard(true);
   const blob = new Blob(["﻿" + vcf], {type:"text/vcard;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -424,18 +461,25 @@ function baixarVCard(){
 }
 
 /* =========================================================================
-   5) QR CODE — aponta para a própria URL da página (window.location.href)
+   5) QR CODE — duas abas:
+      "Contato" (padrão): os dados vão DENTRO do QR. O cliente escaneia e salva
+                          na agenda mesmo SEM internet. Não depende de hospedagem.
+      "Link":             abre a página do cartão. Só aparece se houver uma URL
+                          pública de verdade (http/https).
    ========================================================================= */
 const modal = document.getElementById("modal");
-let qrDesenhado = false;
 
-// URL que o QR Code carrega: a fixa do CONFIG, ou a da própria página se não houver.
+// URL que o QR de link carrega: a fixa do CONFIG, ou a da própria página.
 const urlDoCartao = () => val(CONFIG.urlPublica) || window.location.href;
+// Só faz sentido oferecer o QR de link se a página estiver publicada na web.
+const temLinkPublico = () => /^https?:\/\//i.test(urlDoCartao());
 
-function desenharQR(){
-  const texto = urlDoCartao();
-  qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];  // necessário p/ URLs com acentos
-  const qr = qrcode(0, "M");            // 0 = escolhe a versão automaticamente | "M" = correção média
+// Desenha qualquer texto como QR no canvas.
+// ecc: "L" (menos redundância -> código menor -> módulo maior na tela -> lê mais fácil)
+//      "M" (mais redundância). Para texto curto, como um link, "M" cabe sem problema.
+function desenharQR(texto, ecc){
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];  // necessário p/ acentos
+  const qr = qrcode(0, ecc || "M");     // 0 = escolhe a versão automaticamente
   qr.addData(texto, "Byte");
   qr.make();
 
@@ -453,12 +497,30 @@ function desenharQR(){
     for (let c = 0; c < n; c++)
       if (qr.isDark(r, c))
         ctx.fillRect((c + margem) * escala, (r + margem) * escala, escala, escala);
+}
 
-  document.getElementById("modal-url").textContent = texto;
+let abaAtual = "contato";
+function mostrarAba(aba){
+  abaAtual = aba;
+  document.querySelectorAll(".aba").forEach(b =>
+    b.classList.toggle("ativa", b.dataset.aba === aba));
+
+  const ehContato = aba === "contato";
+  // contato usa "L" de propósito: o vCard é longo, e "L" mantém o código pequeno o
+  // bastante para a câmera ler. O link é curto, então "M" (mais robusto) cabe folgado.
+  desenharQR(ehContato ? textoVCard(false) : urlDoCartao(), ehContato ? "L" : "M");
+
+  document.getElementById("modal-dica").textContent = ehContato
+    ? "Aponte a câmera. O contato é salvo direto na agenda — funciona sem internet."
+    : "Aponte a câmera para abrir a página do cartão.";
+  document.getElementById("modal-url").textContent = ehContato ? "" : urlDoCartao();
+  document.getElementById("btn-acao").textContent = ehContato ? "Salvar contato" : "Copiar link";
 }
 
 function abrirModal(){
-  if (!qrDesenhado) { desenharQR(); qrDesenhado = true; }   // gera só na 1ª abertura
+  // Se a página não estiver publicada, a aba de link some (nada de QR quebrado).
+  document.querySelector('.aba[data-aba="link"]').hidden = !temLinkPublico();
+  mostrarAba("contato");
   modal.hidden = false;
   document.getElementById("btn-fechar").focus();
 }
@@ -467,12 +529,15 @@ function fecharModal(){
   document.getElementById("btn-compartilhar").focus();
 }
 
+document.querySelectorAll(".aba").forEach(b =>
+  b.addEventListener("click", () => mostrarAba(b.dataset.aba)));
 document.getElementById("btn-fechar").addEventListener("click", fecharModal);
 modal.addEventListener("click", ev => { if (ev.target === modal) fecharModal(); });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modal.hidden) fecharModal(); });
 
-// Copiar link (usa o compartilhamento nativo do celular quando disponível)
-document.getElementById("btn-copiar").addEventListener("click", async function(){
+// Botão de ação do modal: baixa o contato (aba Contato) ou copia o link (aba Link)
+document.getElementById("btn-acao").addEventListener("click", async function(){
+  if (abaAtual === "contato") { baixarVCard(); return; }
   const url = urlDoCartao();
   const btn = this;
   try {
