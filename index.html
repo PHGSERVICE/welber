@@ -169,6 +169,8 @@ button{font:inherit}
   display:flex;flex-direction:column;gap:10px;
   padding:0 22px 22px;
 }
+/* .btn serve tanto para <button> quanto para <a> (o "Salvar contato" é um link real
+   para o .vcf — sem isso o Safari do iPhone recusa o arquivo) */
 .btn{
   display:flex;align-items:center;justify-content:center;gap:9px;
   width:100%;padding:15px 16px;
@@ -176,8 +178,11 @@ button{font:inherit}
   font-size:15px;font-weight:600;
   cursor:pointer;
   border:1px solid transparent;
+  text-decoration:none;               /* quando for <a> */
+  -webkit-tap-highlight-color:transparent;
   transition:filter .18s ease,background .18s ease,transform .12s ease;
 }
+a.btn:hover{text-decoration:none}
 .btn:active{transform:scale(.985)}
 .btn svg{width:19px;height:19px}
 .btn-primario{background:var(--laranja);color:#fff}
@@ -268,7 +273,7 @@ button{font:inherit}
     <div class="qr-box"><canvas id="qr"></canvas></div>
     <p class="modal-url" id="modal-url"></p>
     <div class="modal-acoes">
-      <button class="btn btn-primario" id="btn-acao" type="button">Salvar contato</button>
+      <a class="btn btn-primario" id="btn-acao" role="button" href="#">Salvar contato</a>
       <button class="btn btn-secundario" id="btn-fechar" type="button">Fechar</button>
     </div>
   </div>
@@ -298,6 +303,7 @@ const CONFIG = {
   site: "https://www.phgservice.com.br/",
   areas: ["Inspeção NR-13", "Manutenção de válvulas", "Calibração de instrumentos"],
   empresa: "PHG Service",
+  vcardUrl: "welber.vcf",
   urlPublica: "https://phgservice.github.io/welber/"
 };
 
@@ -400,14 +406,20 @@ function renderizar(){
     ? `<div class="corpo">${blocoAreas}${blocoContatos}</div>`
     : "";
 
+  // "Salvar contato": vira um link real para o .vcf quando ele existe (única forma de
+  // funcionar no iPhone). Sem arquivo, cai no método antigo, que gera o vCard na hora.
+  const salvar = temArquivoVCard()
+    ? `<a class="btn btn-primario" id="btn-vcard" href="${esc(CONFIG.vcardUrl)}" type="text/vcard">${ICONES.baixar} Salvar contato</a>`
+    : `<button class="btn btn-primario" id="btn-vcard" type="button">${ICONES.baixar} Salvar contato</button>`;
+
   const rodape = `
     <footer class="rodape">
-      <button class="btn btn-primario" id="btn-vcard" type="button">${ICONES.baixar} Salvar contato</button>
+      ${salvar}
       <button class="btn btn-secundario" id="btn-compartilhar" type="button">${ICONES.compartilhar} Compartilhar</button>
     </footer>`;
 
   document.getElementById("card").innerHTML = topo + corpo + rodape;
-  document.getElementById("btn-vcard").addEventListener("click", baixarVCard);
+  if (!temArquivoVCard()) document.getElementById("btn-vcard").addEventListener("click", baixarVCard);
   document.getElementById("btn-compartilhar").addEventListener("click", abrirModal);
 
   if (nome) document.title = `${nome} — ${cargo || CONFIG.empresa}`;
@@ -446,6 +458,12 @@ function textoVCard(completo){
   return linhas.join("\r\n") + "\r\n";
 }
 
+// O .vcf hospedado só serve quando a página está na web (http/https).
+// Aberta como arquivo local, o navegador não consegue buscá-lo — aí usamos o método antigo.
+const temArquivoVCard = () => !!val(CONFIG.vcardUrl) && /^https?:$/i.test(window.location.protocol);
+
+// Método antigo (gera o vCard na hora). Só é usado quando NÃO há arquivo hospedado.
+// No iPhone ele falha ("O Safari não pode baixar esse arquivo") — por isso o arquivo real existe.
 function baixarVCard(){
   const nome = val(CONFIG.nome) || "Contato";
   const vcf = textoVCard(true);
@@ -514,7 +532,12 @@ function mostrarAba(aba){
     ? "Aponte a câmera. O contato é salvo direto na agenda — funciona sem internet."
     : "Aponte a câmera para abrir a página do cartão.";
   document.getElementById("modal-url").textContent = ehContato ? "" : urlDoCartao();
-  document.getElementById("btn-acao").textContent = ehContato ? "Salvar contato" : "Copiar link";
+
+  const acao = document.getElementById("btn-acao");
+  acao.textContent = ehContato ? "Salvar contato" : "Copiar link";
+  // Na aba Contato, o botão vira um link real para o .vcf — é o que faz o iPhone funcionar.
+  if (ehContato && temArquivoVCard()) acao.setAttribute("href", CONFIG.vcardUrl);
+  else acao.setAttribute("href", "#");
 }
 
 function abrirModal(){
@@ -535,9 +558,16 @@ document.getElementById("btn-fechar").addEventListener("click", fecharModal);
 modal.addEventListener("click", ev => { if (ev.target === modal) fecharModal(); });
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !modal.hidden) fecharModal(); });
 
-// Botão de ação do modal: baixa o contato (aba Contato) ou copia o link (aba Link)
-document.getElementById("btn-acao").addEventListener("click", async function(){
-  if (abaAtual === "contato") { baixarVCard(); return; }
+// Botão de ação do modal: salva o contato (aba Contato) ou copia o link (aba Link)
+document.getElementById("btn-acao").addEventListener("click", async function(ev){
+  if (abaAtual === "contato") {
+    // Com arquivo .vcf hospedado, deixamos o link seguir sozinho (o iPhone precisa disso).
+    if (temArquivoVCard()) return;
+    ev.preventDefault();
+    baixarVCard();
+    return;
+  }
+  ev.preventDefault();
   const url = urlDoCartao();
   const btn = this;
   try {
